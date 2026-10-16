@@ -1,0 +1,15 @@
+{
+  "name": "cli-transcriber",
+  "version": "0.1.0",
+  "description": "Skills and agents written once as YAML with shared partials: a skill that keeps the agent editing the sources, and a hook that stops edits to the generated files.",
+  "author": {
+    "name": "Jan Truhlar",
+    "email": "me@jant.cz",
+    "url": "https://github.com/JanTcz"
+  },
+  "homepage": "https://github.com/JanTcz/cli-transcriber",
+  "repository": "https://github.com/JanTcz/cli-transcriber",
+  "license": "MIT",
+  "keywords": ["skills", "subagents", "templates", "partials"],
+  "hooks": "./claude/hooks.json"
+}

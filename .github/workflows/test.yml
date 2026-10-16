@@ -1,0 +1,52 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+      # Every test, and 100 % lines, branches and functions of src/.
+      - run: npm test
+
+  # The oldest supported Node: the tests without the coverage gate (its flags came in Node 22).
+  node-20:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: node --test test/*.test.js
+
+  # What npm would publish installs and runs: the example builds from the packed tool.
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm pack
+      - run: |
+          cd "$(mktemp -d)"
+          npm install --no-save "$GITHUB_WORKSPACE"/cli-transcriber-*.tgz
+          cp -R "$GITHUB_WORKSPACE"/examples/team project
+          npx cli-transcriber check --root=project
+          rm -r project/.claude && npx cli-transcriber build --root=project && npx cli-transcriber check --root=project
+          test -f node_modules/cli-transcriber/agents/claude/guard.mjs

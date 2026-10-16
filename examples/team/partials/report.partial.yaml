@@ -1,0 +1,13 @@
+name: report
+description: The shape of a report, with the evidence rule built in.
+imports:
+  partials: [evidence]
+params:
+  - name: title
+    description: the report's heading
+body: |
+  ## {{title}}
+
+  List the findings, most serious first, one line each, then the details.
+
+  {{partial:evidence what="finding"}}

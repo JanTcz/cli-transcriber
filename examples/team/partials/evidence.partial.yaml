@@ -1,0 +1,9 @@
+name: evidence
+description: How to back up a claim. Used by every skill that reports findings.
+params:
+  - name: what
+    description: what is being reported
+    default: finding
+body: |
+  Every {{what}} needs evidence: a file and line, a command with its output, or a link.
+  Say "I don't know" rather than guess.

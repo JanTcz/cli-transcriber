@@ -1,0 +1,53 @@
+{
+  "name": "cli-transcriber",
+  "version": "0.1.0",
+  "description": "Write agent skills and subagents once, as YAML with shared partials, and get Markdown for Claude Code, Codex and plugins. Every partial, skill, agent and tool a source uses must exist and be declared; the build checks it all and says where.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Jan Truhlar <me@jant.cz>",
+  "homepage": "https://github.com/JanTcz/cli-transcriber#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JanTcz/cli-transcriber.git"
+  },
+  "bugs": "https://github.com/JanTcz/cli-transcriber/issues",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "cli-transcriber": "./bin/cli-transcriber.js"
+  },
+  "files": [
+    "src",
+    "bin",
+    "agents"
+  ],
+  "scripts": {
+    "test": "node --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 test/*.test.js"
+  },
+  "dependencies": {
+    "yaml": "^2.8.0"
+  },
+  "keywords": [
+    "agent-skills",
+    "claude-code",
+    "codex",
+    "skills",
+    "subagents",
+    "templates",
+    "partials",
+    "yaml",
+    "markdown",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

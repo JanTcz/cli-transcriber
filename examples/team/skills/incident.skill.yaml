@@ -1,0 +1,15 @@
+name: incident
+description: Write up a production incident. Use after an outage or a failed deploy.
+imports:
+  partials: [report, evidence]
+  skills: [review]
+body: |
+  # Incident write-up
+
+  Timeline first, then the cause. For the fix, run {{skill:review}} on the change.
+
+  {{partial:report title="Incident"}}
+
+  For the timeline too:
+
+  {{partial:evidence what="timestamp"}}
