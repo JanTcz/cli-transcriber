@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { USAGE, UsageError, VERSION, formatText, init, main, parseArgs } from '../src/cli.js';
 import { CONFIG } from '../src/project.js';
-import { BASIC, exists, project, read, sink, write } from './helpers.js';
+import { BASIC, SHORT_RULE, exists, project, read, sink, write } from './helpers.js';
 
 const BIN = fileURLToPath(new URL('../bin/cli-transcriber.js', import.meta.url));
 
@@ -67,8 +67,19 @@ test('show: the rendered file, or the problems', async (t) => {
   assert.equal(s.code, 0);
   assert.match(s.out, /^---\nname: review\n[\s\S]*Ask checker\.\n$/);
   const missing = await cli(['show', 'nope', '--text'], { cwd });
-  assert.deepEqual([missing.code, missing.out], [1, 'transcriber.yaml  error  no skill or agent named "nope"\n✖ 1 error\n']);
+  assert.deepEqual([missing.code, missing.out], [1, 'transcriber.yaml  error  no skill, agent or rule named "nope"\n✖ 1 error\n']);
   assert.equal((await cli(['show', 'checker'], { cwd })).json().kind, 'agent');
+  write(cwd, { 'rules/cite-it.rule.yaml': SHORT_RULE });
+  assert.deepEqual((await cli(['show', 'rule:cite-it'], { cwd })).json(), {
+    op: 'show',
+    ok: true,
+    problems: [],
+    kind: 'rule',
+    name: 'cite-it',
+    source: 'rules/cite-it.rule.yaml',
+    content: 'Cite a file and line for every claim.\n',
+  });
+  assert.equal((await cli(['show', 'cite-it', '--text'], { cwd })).out, 'Cite a file and line for every claim.\n');
 });
 
 test('init: the config and an example that builds, never overwriting', async (t) => {

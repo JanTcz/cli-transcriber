@@ -3,11 +3,12 @@
 //
 //   {{partial:NAME key="value" key2=bare}}   the partial's body, its {{key}}s filled in
 //   {{skill:NAME}} {{agent:NAME}}            the name, checked to exist
+//   {{rule:NAME}}                            the rule's body, as it is
 //   \{{                                      a literal {{
 
 import { problem } from './load.js';
 
-const MARKER_KINDS = { partial: 'partials', skill: 'skills', agent: 'agents' };
+const MARKER_KINDS = { partial: 'partials', skill: 'skills', agent: 'agents', rule: 'rules' };
 const MARKER = /(\\?)\{\{\s*([a-z]+):([^\s}]+)((?:\s+[^\s=}]+=(?:"[^"]*"|'[^']*'|[^\s"'}]+))*)\s*\}\}/g;
 const ARG = /([^\s=}]+)=(?:"([^"]*)"|'([^']*)'|([^\s"'}]+))/g;
 const LOOSE = /(?<!\\)\{\{\s*[a-z]+:/g;
@@ -61,7 +62,7 @@ function* lines(doc) {
 const multiline = (text) => text.replace(/\n+$/, '').includes('\n');
 
 /**
- * Checks every source against the others. `registry` is { skill, agent, partial }: Maps
+ * Checks every source against the others. `registry` is { skill, agent, partial, rule }: Maps
  * of name → doc. Returns problems; adds nothing to the docs.
  */
 export function validate(docs, registry, { tools = [] } = {}) {
@@ -69,14 +70,16 @@ export function validate(docs, registry, { tools = [] } = {}) {
   const usedPartials = new Set();
   const edges = new Map();
   for (const doc of docs) {
-    const used = { partials: new Set(), skills: new Set(), agents: new Set() };
+    // A rule is text, not a template: nothing in it is a marker, it imports nothing.
+    if (doc.kind === 'rule') continue;
+    const used = { partials: new Set(), skills: new Set(), agents: new Set(), rules: new Set() };
     for (const { text, line } of lines(doc)) {
       for (const at of looseMarkers(text)) problems.push(problem(doc.file, line, `a marker that doesn't parse: ${text.slice(at, at + 40).trim()}…`));
       for (const m of markersIn(text)) {
         if (m.escaped) continue;
         const list = MARKER_KINDS[m.kind];
         if (!list) {
-          problems.push(problem(doc.file, line, `unknown marker {{${m.kind}:…}}; markers are partial, skill and agent${suggest(m.kind, Object.keys(MARKER_KINDS))}`));
+          problems.push(problem(doc.file, line, `unknown marker {{${m.kind}:…}}; markers are partial, skill, agent and rule${suggest(m.kind, Object.keys(MARKER_KINDS))}`));
           continue;
         }
         used[list].add(m.name);
@@ -86,6 +89,9 @@ export function validate(docs, registry, { tools = [] } = {}) {
           continue;
         }
         if (!doc.imports[list].some((i) => i.name === m.name)) problems.push(problem(doc.file, line, `uses ${m.kind} "${m.name}" without importing it: add it to imports.${list}`));
+        if ((m.kind === 'partial' || m.kind === 'rule') && multiline(target.blocks[0].text) && text.trim() !== m.raw) {
+          problems.push(problem(doc.file, line, `${m.kind} "${m.name}" has several lines, so its marker must be alone on its line`));
+        }
         if (m.kind !== 'partial') {
           if (Object.keys(m.args).length) problems.push(problem(doc.file, line, `{{${m.kind}:…}} takes no parameters`));
           continue;
@@ -97,9 +103,6 @@ export function validate(docs, registry, { tools = [] } = {}) {
         }
         for (const p of target.params) {
           if (!p.hasDefault && !(p.name in m.args)) problems.push(problem(doc.file, line, `partial "${m.name}" needs parameter "${p.name}"`));
-        }
-        if (multiline(target.blocks[0].text) && text.trim() !== m.raw) {
-          problems.push(problem(doc.file, line, `partial "${m.name}" has several lines, so its marker must be alone on its line`));
         }
       }
     }
@@ -190,18 +193,34 @@ function expandPartial(partial, args, registry) {
     .split('\n')
     .map((line) => line.replace(PLACEHOLDER, (raw, esc, dollar, name) => (esc || dollar ? raw : values[name])))
     .join('\n');
-  return expandText(filled, registry);
+  return expand(filled, registry);
 }
 
-/** Markers in a text replaced; a multi-line partial keeps the indentation of its marker. */
-export function expandText(text, registry) {
+/** What {{rule:NAME}} becomes: the rule's body as it is, without its trailing newlines. */
+export function ruleText(rule) {
+  return rule.blocks[0].text.replace(/\n+$/, '');
+}
+
+// A rule's {{ stand for themselves at any depth: held out of the unescaping of \{{ (each partial
+// level does it once) until the end. YAML text can't hold this character, so no source has it.
+const HELD = '\u0000';
+
+/** The text one marker stands for. */
+function insert(m, registry) {
+  if (m.kind === 'partial') return expandPartial(registry.partial.get(m.name), m.args, registry);
+  if (m.kind === 'rule') return ruleText(registry.rule.get(m.name)).replaceAll('{{', HELD);
+  return m.name;
+}
+
+/** Markers replaced; a multi-line partial or rule keeps the indentation of its marker. */
+function expand(text, registry) {
   return text
     .split('\n')
     .map((line) => {
       const markers = markersIn(line).filter((m) => !m.escaped);
-      if (markers.length === 1 && markers[0].kind === 'partial' && line.trim() === markers[0].raw) {
+      if (markers.length === 1 && markers[0].kind !== 'skill' && markers[0].kind !== 'agent' && line.trim() === markers[0].raw) {
         const indent = /^\s*/.exec(line)[0];
-        return expandPartial(registry.partial.get(markers[0].name), markers[0].args, registry)
+        return insert(markers[0], registry)
           .split('\n')
           .map((l) => (l ? indent + l : l))
           .join('\n');
@@ -209,14 +228,18 @@ export function expandText(text, registry) {
       let out = '';
       let at = 0;
       for (const m of markers) {
-        out += line.slice(at, m.start);
-        out += m.kind === 'partial' ? expandPartial(registry.partial.get(m.name), m.args, registry) : m.name;
+        out += line.slice(at, m.start) + insert(m, registry);
         at = m.end;
       }
       return out + line.slice(at);
     })
     .join('\n')
     .replace(/\\\{\{/g, '{{');
+}
+
+/** Markers in a text replaced, `\{{` written as `{{`. */
+export function expandText(text, registry) {
+  return expand(text, registry).replaceAll(HELD, '{{');
 }
 
 /** The body of a skill or agent: its blocks, expanded, one after another. */

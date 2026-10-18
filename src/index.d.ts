@@ -1,4 +1,4 @@
-export type Kind = 'skill' | 'agent' | 'partial';
+export type Kind = 'skill' | 'agent' | 'partial' | 'rule';
 
 export const KINDS: readonly Kind[];
 export const CONFIG: string;
@@ -14,7 +14,7 @@ export interface Problem {
 }
 
 export interface Config {
-  /** Folders searched for *.skill.yaml, *.agent.yaml, *.partial.yaml. */
+  /** Folders searched for *.skill.yaml, *.agent.yaml, *.partial.yaml, *.rule.yaml. */
   sources: string[];
   /** claude, codex, plugin:<folder> */
   targets: string[];
@@ -42,7 +42,7 @@ export function build(root: string, opts?: { force?: boolean }): {
   unchanged?: number;
 };
 export function check(root: string): { op: 'check'; ok: boolean; problems: Problem[]; outdated: { path: string; why: string }[] };
-export function show(root: string, name: string): { op: 'show'; ok: boolean; problems: Problem[]; kind?: 'skill' | 'agent'; name?: string; source?: string; content?: string };
+export function show(root: string, name: string): { op: 'show'; ok: boolean; problems: Problem[]; kind?: 'skill' | 'agent' | 'rule'; name?: string; source?: string; content?: string };
 export function init(root: string): { op: 'init'; ok: true; problems: []; created: string[] };
 
 export function discover(root: string, sources: string[], skip?: string[]): string[];

@@ -13,10 +13,11 @@ Usage: cli-transcriber <command> [--root=dir] [--json|--text]
   build        check every source, then write the skills and agents (and remove stale ones)
     --force    overwrite files at output paths that cli-transcriber didn't write
   check        check every source and that every output is up to date; writes nothing (CI)
-  show NAME    print one skill or agent as it would be written (skill:NAME or agent:NAME if both exist)
+  show NAME    print one skill or agent as it would be written, or a rule as {{rule:NAME}} puts it
+               (skill:NAME, agent:NAME or rule:NAME when several share the name)
   init         create ${CONFIG} and an example skill and partial
 
-Sources: *.skill.yaml, *.agent.yaml, *.partial.yaml under the folders in ${CONFIG} (default: all).
+Sources: *.skill.yaml, *.agent.yaml, *.partial.yaml, *.rule.yaml under the folders in ${CONFIG} (default: all).
 Exit: 0 fine, 1 problems in the sources or outdated outputs, 2 bad arguments or config.
 `;
 
@@ -62,7 +63,7 @@ export function formatText(r) {
 }
 
 const EXAMPLE_CONFIG = `# cli-transcriber: where the sources are and what to write.
-sources: [.]          # folders searched for *.skill.yaml, *.agent.yaml, *.partial.yaml
+sources: [.]          # folders searched for *.skill.yaml, *.agent.yaml, *.partial.yaml, *.rule.yaml
 targets: [claude]     # claude (.claude/), codex (.agents/skills), plugin:<folder>
 tools: []             # tool names of your own, besides Claude Code's and mcp__*
 `;

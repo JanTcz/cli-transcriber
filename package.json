@@ -1,6 +1,6 @@
 {
   "name": "cli-transcriber",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Write agent skills and subagents once, as YAML with shared partials, and get Markdown for Claude Code, Codex and plugins. Every partial, skill, agent and tool a source uses must exist and be declared; the build checks it all and says where.",
   "type": "module",
   "license": "MIT",

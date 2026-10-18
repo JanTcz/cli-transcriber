@@ -1,0 +1,17 @@
+name: refactor
+description: Change existing code without changing what it does. Use when asked to clean up, restructure or simplify code.
+imports:
+  rules: [preserve-existing-behavior, code-quality-leave-it-better]
+  skills: [review]
+body: |
+  # Refactor
+
+  Run the tests before the first edit and after the last; they pass both times.
+
+  ## Rules
+
+  {{rule:preserve-existing-behavior}}
+
+  {{rule:code-quality-leave-it-better}}
+
+  Then hand the diff to {{skill:review}}.

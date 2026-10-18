@@ -1,0 +1,13 @@
+$kind: "rule"
+
+name: code-quality-leave-it-better
+title: "Leave it better"
+version: 1.0.0
+scope: universal
+severity: SHOULD
+
+body: |
+  **Leave every file you touch in better shape than you found it.**
+
+  While you change a file, tidy what is cheap and safe to tidy in it: dead code, unused imports, a value written twice,
+  a name that says less than it should. Keep it in proportion to the change; anything bigger is noted, not done.

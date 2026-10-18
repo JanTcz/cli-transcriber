@@ -1,23 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KINDS, NAME, SHAPES, discover, load, problem } from '../src/load.js';
-import { brief, project } from './helpers.js';
+import { RULE, RULE_BODY, brief, project } from './helpers.js';
 
 const one = (t, file, content) => load(project(t, { [file]: content }), file);
 
-test('discover: the three kinds, in the given folders, not in node_modules, .git or skipped folders', (t) => {
+test('discover: the four kinds, in the given folders, not in node_modules, .git or skipped folders', (t) => {
   const dir = project(t, {
     'a/x.skill.yaml': '',
     'a/y.agent.yml': '',
     'b/z.partial.yaml': '',
+    'c/shared/w.rule.yaml': '',
+    'c/shared/w.rule.md': '',
     'a/notes.yaml': '',
     'node_modules/m/p.skill.yaml': '',
     '.git/q.skill.yaml': '',
     'out/skills/r.skill.yaml': '',
   });
-  assert.deepEqual(discover(dir, ['.'], ['out']), ['a/x.skill.yaml', 'a/y.agent.yml', 'b/z.partial.yaml']);
+  assert.deepEqual(discover(dir, ['.'], ['out']), ['a/x.skill.yaml', 'a/y.agent.yml', 'b/z.partial.yaml', 'c/shared/w.rule.yaml']);
   assert.deepEqual(discover(dir, ['b', 'b', 'missing']), ['b/z.partial.yaml']);
-  assert.deepEqual(KINDS, ['skill', 'agent', 'partial']);
+  assert.deepEqual(KINDS, ['skill', 'agent', 'partial', 'rule']);
   assert.ok(NAME.test('a.b_c-1') && !NAME.test('A') && !NAME.test('-a'));
   assert.deepEqual(problem('f', 2, 'm'), { level: 'error', file: 'f', line: 2, message: 'm' });
 });
@@ -51,7 +53,7 @@ prose_blocks:
   assert.deepEqual(problems, []);
   assert.equal(doc.kind, 'skill');
   assert.equal(doc.name, 's');
-  assert.deepEqual(doc.imports, { partials: [{ name: 'p', line: 5 }], skills: [], agents: [{ name: 'a', line: 6 }] });
+  assert.deepEqual(doc.imports, { partials: [{ name: 'p', line: 5 }], skills: [], agents: [{ name: 'a', line: 6 }], rules: [] });
   assert.deepEqual(doc.blocks.map((b) => b.text.trim()), ['intro', 'middle', 'list', 'outro']);
   // Lines inside a block scalar start on the line after the indicator.
   assert.equal(doc.textLine(doc.blocks[0].at, 0), 20);
@@ -99,7 +101,7 @@ stages: []
   );
   assert.equal(doc, null);
   assert.deepEqual(brief(problems), [
-    'skills/x.skill.yaml:4 "imports" must be a map of partials, skills, agents',
+    'skills/x.skill.yaml:4 "imports" must be a map of partials, skills, agents, rules',
     'skills/x.skill.yaml:9 "prose_blocks" must be a list of { placement, body }',
     'skills/x.skill.yaml:10 unknown field "stages" in a skill; put your own fields under "metadata"',
     'skills/x.skill.yaml:1 $kind is "agent" but the file is a .skill.yaml',
@@ -116,7 +118,7 @@ test('load: names, descriptions, imports, prose blocks, params that are wrong', 
   assert.deepEqual(brief(s.problems), [
     'a/right.skill.yaml:1 name "wrong" must match the file name "right"',
     'a/right.skill.yaml:2 description is empty',
-    'a/right.skill.yaml:4 imports can list partials, skills, agents; not "tools"',
+    'a/right.skill.yaml:4 imports can list partials, skills, agents, rules; not "tools"',
     'a/right.skill.yaml:5 imports.partials must be a list of names',
     'a/right.skill.yaml:6 imports.skills must be a list of names',
     'a/right.skill.yaml:1 a skill needs "body" or "prose_blocks" (one of them)',
@@ -133,4 +135,84 @@ test('load: names, descriptions, imports, prose blocks, params that are wrong', 
   assert.deepEqual(brief(one(t, 'p.partial.yaml', 'name: p\nparams: 3\nbody: x\n').problems), ['p.partial.yaml:2 "params" must be a list of { name, description, default } or a map']);
   assert.equal(one(t, 'n.skill.yaml', 'name: 5\ndescription: 6\nbody: x\n').problems.length, 2);
   assert.ok(SHAPES.partial.body.required);
+});
+
+test('load: a rule as the framework writes it, unconverted: its body is the text, the rest is metadata', (t) => {
+  const { doc, problems } = one(t, 'rules/shared/leave-it-better.rule.yaml', RULE);
+  assert.deepEqual(problems, []);
+  assert.deepEqual([doc.kind, doc.name, doc.params, doc.imports], ['rule', 'leave-it-better', [], { partials: [], skills: [], agents: [], rules: [] }]);
+  assert.equal(doc.blocks.length, 1);
+  assert.equal(doc.blocks[0].text.trimEnd(), RULE_BODY);
+  assert.deepEqual([doc.data.title, doc.data.severity, doc.data.scope], ['Leave it better', 'SHOULD', 'universal']);
+  // Every other field the framework's rules carry, in each of the forms they take there.
+  const full = one(
+    t,
+    'r.rule.yml',
+    `name: r
+description: d
+title: T
+version: 2
+status: done
+owner: me/
+deprecated: "use other-rule instead"
+scope: stack
+severity: MAY
+reflex: "do it"
+subagent_reflex: false
+discipline: general
+layer: atomic
+examples: [a, { code: x, comment: y }]
+anti_examples: []
+cross_links: [wiki/x.md]
+removal_predicate: "remove if recurrences == 0 for 90d"
+enforced_by: [hook-a, hook-b]
+enforcement_status: advisory
+enforcement_rationale: "review-time judgment"
+metadata: { mine: 1 }
+body: x
+`,
+  );
+  assert.deepEqual(full.problems, []);
+  assert.equal(full.doc.blocks[0].text, 'x');
+  for (const enforcedBy of ['hook-a', 'null']) assert.deepEqual(one(t, 'r.rule.yaml', `name: r\nenforced_by: ${enforcedBy}\nbody: x\n`).problems, []);
+});
+
+test('load: a rule is checked as strictly as the other kinds', (t) => {
+  const { doc, problems } = one(
+    t,
+    'rules/r.rule.yaml',
+    `$kind: skill
+name: other
+title: 3
+version: [1]
+deprecated: 3
+severity: { level: MUST }
+subagent_reflex: "yes"
+cross_links: a.md
+enforced_by: [1]
+imports:
+  partials: [p]
+prose_blocks: []
+stages: []
+`,
+  );
+  assert.equal(doc, null);
+  assert.deepEqual(brief(problems), [
+    'rules/r.rule.yaml:1 "body" is required',
+    'rules/r.rule.yaml:3 "title" must be text',
+    'rules/r.rule.yaml:4 "version" must be text or a number',
+    'rules/r.rule.yaml:5 "deprecated" must be text or null',
+    'rules/r.rule.yaml:6 "severity" must be text',
+    'rules/r.rule.yaml:7 "subagent_reflex" must be true or false',
+    'rules/r.rule.yaml:8 "cross_links" must be a list',
+    'rules/r.rule.yaml:9 "enforced_by" must be a name, a list of names or null',
+    'rules/r.rule.yaml:11 unknown field "imports" in a rule; put your own fields under "metadata"',
+    'rules/r.rule.yaml:12 unknown field "prose_blocks" in a rule; put your own fields under "metadata"',
+    'rules/r.rule.yaml:13 unknown field "stages" in a rule; put your own fields under "metadata"',
+    'rules/r.rule.yaml:1 $kind is "skill" but the file is a .rule.yaml',
+    'rules/r.rule.yaml:2 name "other" must match the file name "r"',
+  ]);
+  assert.deepEqual(brief(one(t, 'r.rule.yaml', 'body: 7\n').problems), ['r.rule.yaml:1 "name" is required', 'r.rule.yaml:1 "body" must be text']);
+  // A rule's description is metadata, not frontmatter: no length limit.
+  assert.deepEqual(one(t, 'r.rule.yaml', `name: r\ndescription: "${'d'.repeat(1025)}"\nbody: x\n`).problems, []);
 });

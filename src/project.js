@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml, stringify } from 'yaml';
-import { renderBody, validate } from './language.js';
+import { renderBody, ruleText, validate } from './language.js';
 import { KINDS, discover, load, problem } from './load.js';
 
 export const CONFIG = 'transcriber.yaml';
@@ -173,12 +173,13 @@ export function check(root) {
   return { op: 'check', ok: outdated.length === 0, problems: compiled.problems, outdated };
 }
 
-/** One skill or agent, rendered, without writing anything. */
+/** One skill or agent rendered, or a rule as its marker puts it; without writing anything. */
 export function show(root, name) {
   const compiled = compile(root);
   if (!compiled.outputs) return { op: 'show', ok: false, problems: compiled.problems };
   const [kind, bare] = name.includes(':') ? name.split(':', 2) : [null, name];
-  const doc = ['skill', 'agent'].filter((k) => !kind || k === kind).map((k) => compiled.registry[k].get(bare)).find(Boolean);
-  if (!doc) return { op: 'show', ok: false, problems: [...compiled.problems, problem(CONFIG, 0, `no skill or agent named "${bare}"`)] };
-  return { op: 'show', ok: true, problems: compiled.problems, kind: doc.kind, name: doc.name, source: doc.file, content: render(doc, compiled.registry) };
+  const doc = ['skill', 'agent', 'rule'].filter((k) => !kind || k === kind).map((k) => compiled.registry[k].get(bare)).find(Boolean);
+  if (!doc) return { op: 'show', ok: false, problems: [...compiled.problems, problem(CONFIG, 0, `no skill, agent or rule named "${bare}"`)] };
+  const content = doc.kind === 'rule' ? `${ruleText(doc)}\n` : render(doc, compiled.registry);
+  return { op: 'show', ok: true, problems: compiled.problems, kind: doc.kind, name: doc.name, source: doc.file, content };
 }
