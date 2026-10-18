@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { KNOWN_TOOLS, looseMarkers, markersIn, placeholdersIn, suggest } from '../src/language.js';
 import { compile } from '../src/project.js';
-import { BASIC, brief, project } from './helpers.js';
+import { BASIC, RULE, RULE_BODY, SHORT_RULE, brief, project } from './helpers.js';
 
 const problemsOf = (t, files) => brief(compile(project(t, files)).problems);
 const outputOf = (t, files, rel) => compile(project(t, files)).outputs.get(rel);
@@ -56,6 +56,68 @@ test('rendering: partials inside partials, params passed on, values are text', (
   assert.equal(body(outputOf(t, files, '.claude/skills/s/SKILL.md')), 'Outer for s:\n  - one admin {{partial:x}}\n\n  - two\n');
 });
 
+test('rendering: a rule is its body, as it is, where its marker is', (t) => {
+  const files = {
+    'skills/s.skill.yaml': `name: s
+description: d
+imports:
+  rules: [leave-it-better, cite-it]
+  partials: [house]
+body: |
+  # Work
+
+  {{rule:leave-it-better}}
+
+  - Always: {{rule:cite-it}}
+    {{rule:leave-it-better}}
+
+  {{partial:house}}
+`,
+    'partials/house.partial.yaml': 'name: house\nimports:\n  rules: [cite-it, braces]\nbody: "House rules: {{rule:cite-it}} {{rule:braces}}"\n',
+    'rules/shared/leave-it-better.rule.yaml': RULE,
+    'rules/cite-it.rule.yaml': SHORT_RULE,
+    // A rule's body is text, not a template: its braces are neither checked nor expanded, at any depth.
+    'rules/braces.rule.yaml': 'name: braces\nbody: |\n  Keep {{partial:nope}}, \\{{x}} and {{skill:ghost}} as they are.\n',
+    // A rule nobody imports is no warning: rules come from a shared corpus, most of it unused here.
+    'rules/spare.rule.yaml': 'name: spare\nbody: s\n',
+  };
+  const compiled = compile(project(t, files));
+  assert.deepEqual(compiled.problems, []);
+  const indented = RULE_BODY.split('\n').map((l) => (l ? `  ${l}` : l)).join('\n');
+  assert.equal(
+    body(compiled.outputs.get('.claude/skills/s/SKILL.md')),
+    `# Work\n\n${RULE_BODY}\n\n- Always: Cite a file and line for every claim.\n${indented}\n\nHouse rules: Cite a file and line for every claim. Keep {{partial:nope}}, \\{{x}} and {{skill:ghost}} as they are.\n`,
+  );
+  // Rules are sources, not outputs.
+  assert.deepEqual([...compiled.outputs.keys()], ['.claude/skills/s/SKILL.md']);
+});
+
+test('checks: a rule is imported, used, exists, is defined once and stands alone when it has several lines', (t) => {
+  assert.deepEqual(problemsOf(t, {
+    'skills/s.skill.yaml': `name: s
+description: d
+imports:
+  rules: [cite-it, cite-it, ghost, spare]
+body: |
+  {{rule:leave-it-beter}} {{rule:cite-it x=1}}
+  Then {{rule:leave-it-better}} too.
+`,
+    'rules/shared/leave-it-better.rule.yaml': RULE,
+    'rules/cite-it.rule.yaml': SHORT_RULE,
+    'rules/spare.rule.yaml': 'name: spare\nbody: s\n',
+    'other/cite-it.rule.yaml': 'name: cite-it\nbody: again\n',
+  }), [
+    'rules/cite-it.rule.yaml:1 rule "cite-it" is also defined in other/cite-it.rule.yaml',
+    'skills/s.skill.yaml:4 imports rule "ghost", which doesn\'t exist',
+    'skills/s.skill.yaml:4 imports rule "spare" but never uses it: add {{rule:spare}} or remove the import',
+    'skills/s.skill.yaml:4 imports.rules lists "cite-it" twice',
+    'skills/s.skill.yaml:6 {{rule:…}} takes no parameters',
+    'skills/s.skill.yaml:6 rule "leave-it-beter" doesn\'t exist (did you mean "leave-it-better"?)',
+    'skills/s.skill.yaml:7 rule "leave-it-better" has several lines, so its marker must be alone on its line',
+    'skills/s.skill.yaml:7 uses rule "leave-it-better" without importing it: add it to imports.rules',
+  ]);
+});
+
 test('checks: everything used exists and is imported, everything imported is used', (t) => {
   assert.deepEqual(problemsOf(t, {
     ...BASIC,
@@ -76,7 +138,7 @@ body: |
     'skills/review.skill.yaml:8 partial "cit" doesn\'t exist (did you mean "cite"?)',
     'skills/review.skill.yaml:9 partial "cite" has several lines, so its marker must be alone on its line',
     'skills/review.skill.yaml:9 skill "ghost" doesn\'t exist',
-    'skills/review.skill.yaml:9 unknown marker {{agnt:…}}; markers are partial, skill and agent (did you mean "agent"?)',
+    'skills/review.skill.yaml:9 unknown marker {{agnt:…}}; markers are partial, skill, agent and rule (did you mean "agent"?)',
   ]);
   assert.deepEqual(problemsOf(t, { ...BASIC, 'skills/review.skill.yaml': 'name: review\ndescription: d\nimports:\n  skills: [review]\nbody: "{{partial:cite}} {{agent:checker}}"\n' }), [
     'skills/review.skill.yaml:4 imports skill "review" but never uses it: add {{skill:review}} or remove the import',

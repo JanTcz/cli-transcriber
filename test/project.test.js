@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CONFIG, ConfigError, HEADER, build, check, compile, readConfig, show, targetDirs } from '../src/project.js';
-import { BASIC, exists, project, read, write } from './helpers.js';
+import { BASIC, RULE, RULE_BODY, exists, project, read, write } from './helpers.js';
 
 test('targetDirs: claude, codex, a plugin folder', () => {
   assert.deepEqual(targetDirs('claude'), { skills: '.claude/skills', agents: '.claude/agents' });
@@ -123,6 +123,17 @@ test('show: one skill or agent, by name or kind:name', (t) => {
   assert.equal(show(dir, 'checker').kind, 'agent');
   assert.equal(exists(dir, '.claude'), false, 'show writes nothing');
   const missing = show(dir, 'nope');
-  assert.deepEqual([missing.ok, missing.problems.at(-1).message], [false, 'no skill or agent named "nope"']);
+  assert.deepEqual([missing.ok, missing.problems.at(-1).message], [false, 'no skill, agent or rule named "nope"']);
   assert.equal(show(project(t, { 'skills/s.skill.yaml': 'name: s\nbody: b\n' }), 's').ok, false);
+});
+
+test('show: a rule, as its marker would put it, by name or rule:name', (t) => {
+  const dir = project(t, { ...BASIC, 'rules/shared/leave-it-better.rule.yaml': RULE, 'rules/review.rule.yaml': 'name: review\nbody: |\n  Keep {{these}}.\n' });
+  const r = show(dir, 'leave-it-better');
+  assert.deepEqual(r, { op: 'show', ok: true, problems: [], kind: 'rule', name: 'leave-it-better', source: 'rules/shared/leave-it-better.rule.yaml', content: `${RULE_BODY}\n` });
+  // A skill or agent of the same name comes first; rule: picks the rule.
+  assert.equal(show(dir, 'review').kind, 'skill');
+  assert.deepEqual([show(dir, 'rule:review').kind, show(dir, 'rule:review').content], ['rule', 'Keep {{these}}.\n']);
+  assert.equal(show(dir, 'rule:checker').problems.at(-1).message, 'no skill, agent or rule named "checker"');
+  assert.equal(compile(dir).outputs.size, 2, 'rules are not written out');
 });
