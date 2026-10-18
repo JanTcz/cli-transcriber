@@ -1,6 +1,6 @@
 {
   "name": "cli-transcriber",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Skills and agents written once as YAML with shared partials: a skill that keeps the agent editing the sources, and a hook that stops edits to the generated files.",
   "author": {
     "name": "Jan Truhlar",

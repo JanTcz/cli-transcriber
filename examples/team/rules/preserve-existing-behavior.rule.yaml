@@ -1,0 +1,13 @@
+$kind: "rule"
+
+name: preserve-existing-behavior
+title: "Preserve existing behaviour"
+version: 1.0.0
+scope: universal
+severity: MUST
+
+body: |
+  **Change only what the task asks for.**
+
+  Behaviour nobody asked to change stays as it was: the same inputs give the same outputs, the same errors and the same
+  side effects. When a change has to alter something else, say so before making it.

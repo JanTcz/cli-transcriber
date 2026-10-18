@@ -1,2 +1,2 @@
-sources: [skills, agents, partials]
+sources: [skills, agents, partials, rules]
 targets: [claude]

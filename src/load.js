@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LineCounter, isScalar, parseDocument } from 'yaml';
 
-export const KINDS = ['skill', 'agent', 'partial'];
-const SUFFIX = /\.(skill|agent|partial)\.ya?ml$/;
+export const KINDS = ['skill', 'agent', 'partial', 'rule'];
+const SUFFIX = /\.(skill|agent|partial|rule)\.ya?ml$/;
 const SKIP = new Set(['node_modules', '.git']);
 export const NAME = /^[a-z0-9][a-z0-9._-]*$/;
 
@@ -43,13 +43,13 @@ const string = (v) => typeof v === 'string';
 const map = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const list = (v) => Array.isArray(v);
 
-const IMPORTS = ['partials', 'skills', 'agents'];
+const IMPORTS = ['partials', 'skills', 'agents', 'rules'];
 const an = (kind) => (kind === 'agent' ? 'an agent' : `a ${kind}`);
 
 const COMMON = {
   name: { required: true, ok: string, type: 'a string' },
   description: { ok: string, type: 'a string' },
-  imports: { ok: map, type: 'a map of partials, skills, agents' },
+  imports: { ok: map, type: 'a map of partials, skills, agents, rules' },
   metadata: { ok: map, type: 'a map' },
 };
 
@@ -72,6 +72,32 @@ export const SHAPES = {
     ...COMMON,
     params: { ok: (v) => list(v) || map(v), type: 'a list of { name, description, default } or a map' },
     body: { required: true, ok: string, type: 'text' },
+  },
+  // A rule in the format of the framework this comes from (README, Origin), read as it is: the
+  // body is the text, the other fields are metadata. No imports: a rule is text, not a template.
+  rule: {
+    name: COMMON.name,
+    body: { required: true, ok: string, type: 'text' },
+    description: { ok: string, type: 'text' },
+    title: { ok: string, type: 'text' },
+    version: { ok: (v) => string(v) || typeof v === 'number', type: 'text or a number' },
+    status: { ok: string, type: 'text' },
+    owner: { ok: string, type: 'text' },
+    deprecated: { ok: (v) => v === null || string(v), type: 'text or null' },
+    scope: { ok: string, type: 'text' },
+    severity: { ok: string, type: 'text' },
+    reflex: { ok: string, type: 'text' },
+    subagent_reflex: { ok: (v) => typeof v === 'boolean', type: 'true or false' },
+    discipline: { ok: string, type: 'text' },
+    layer: { ok: string, type: 'text' },
+    examples: { ok: list, type: 'a list' },
+    anti_examples: { ok: list, type: 'a list' },
+    cross_links: { ok: list, type: 'a list' },
+    removal_predicate: { ok: string, type: 'text' },
+    enforced_by: { ok: (v) => v === null || string(v) || (list(v) && v.every(string)), type: 'a name, a list of names or null' },
+    enforcement_status: { ok: string, type: 'text' },
+    enforcement_rationale: { ok: string, type: 'text' },
+    metadata: COMMON.metadata,
   },
 };
 
@@ -147,12 +173,13 @@ export function load(root, file) {
     if (!NAME.test(data.name)) problems.push(problem(file, lineOf(['name']), `name "${data.name}" must be lowercase letters, digits, ".", "_" or "-"`));
     else if (data.name !== expected) problems.push(problem(file, lineOf(['name']), `name "${data.name}" must match the file name "${expected}"`));
   }
-  if (string(data.description) && kind !== 'partial') {
+  const page = kind === 'skill' || kind === 'agent';
+  if (string(data.description) && page) {
     if (!data.description.trim()) problems.push(problem(file, lineOf(['description']), 'description is empty'));
     if (data.description.length > 1024) problems.push(problem(file, lineOf(['description']), `description is ${data.description.length} characters; agents read at most 1024`));
   }
 
-  const imports = { partials: [], skills: [], agents: [] };
+  const imports = { partials: [], skills: [], agents: [], rules: [] };
   if (map(data.imports)) {
     for (const [key, value] of Object.entries(data.imports)) {
       if (!IMPORTS.includes(key)) {
@@ -166,7 +193,7 @@ export function load(root, file) {
   }
 
   let blocks = [];
-  if (kind !== 'partial') {
+  if (page) {
     const has = ['body', 'prose_blocks'].filter((k) => k in data);
     if (has.length !== 1) problems.push(problem(file, 1, `${an(kind)} needs "body" or "prose_blocks" (one of them)`));
     if (string(data.body)) blocks = [{ text: data.body, at: ['body'] }];
